@@ -268,22 +268,10 @@ func analyse(logger Logger, img *image.RGBA, cropWidth, cropHeight, realMinScale
 	debugOutput(logger.DebugMode, o, "saturation")
 
 	now = time.Now()
-	var topCrop Crop
-	topScore := -1.0
-	cs := crops(o, cropWidth, cropHeight, realMinScale)
-	logger.Log.Println("Time elapsed crops:", time.Since(now), len(cs))
 
-	now = time.Now()
-	for _, crop := range cs {
-		nowIn := time.Now()
-		crop.Score = score(o, crop)
-		logger.Log.Println("Time elapsed single-score:", time.Since(nowIn))
-		if crop.totalScore() > topScore {
-			topCrop = crop
-			topScore = crop.totalScore()
-		}
-	}
-	logger.Log.Println("Time elapsed score:", time.Since(now))
+	topCrop := crops(o, cropWidth, cropHeight, realMinScale)
+
+	logger.Log.Println("Time elapsed score/crops:", time.Since(now))
 
 	if logger.DebugMode {
 		drawDebugCrop(topCrop, o)
@@ -430,10 +418,13 @@ func saturationDetect(i *image.RGBA, o *image.RGBA) {
 	}
 }
 
-func crops(i image.Image, cropWidth, cropHeight, realMinScale float64) []Crop {
-	res := []Crop{}
-	width := i.Bounds().Dx()
-	height := i.Bounds().Dy()
+func crops(o *image.RGBA, cropWidth, cropHeight, realMinScale float64) Crop {
+
+	var topCrop Crop
+	topScore := -1.0
+
+	width := o.Bounds().Dx()
+	height := o.Bounds().Dy()
 
 	minDimension := math.Min(float64(width), float64(height))
 	var cropW, cropH float64
@@ -452,14 +443,21 @@ func crops(i image.Image, cropWidth, cropHeight, realMinScale float64) []Crop {
 	for scale := maxScale; scale >= realMinScale; scale -= scaleStep {
 		for y := 0; float64(y)+cropH*scale <= float64(height); y += step {
 			for x := 0; float64(x)+cropW*scale <= float64(width); x += step {
-				res = append(res, Crop{
+				curCrop := Crop{
 					Rectangle: image.Rect(x, y, x+int(cropW*scale), y+int(cropH*scale)),
-				})
+				}
+
+				curCrop.Score = score(o, curCrop)
+
+				if curCrop.totalScore() > topScore {
+					topCrop = curCrop
+					topScore = curCrop.totalScore()
+				}
 			}
 		}
 	}
 
-	return res
+	return topCrop
 }
 
 // toRGBA converts an image.Image to an image.RGBA
